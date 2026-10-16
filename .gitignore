@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Estudo comparativo
+results/cache/
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
