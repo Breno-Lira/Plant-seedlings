@@ -227,3 +227,9 @@ paper/*.blg
 paper/*.log
 paper/*.out
 paper/*.synctex.gz
+results/models/
+predictions/
+
+# Imagens de teste locais e ambiente
+imagens_teste/
+predicoes.csv

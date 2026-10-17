@@ -44,6 +44,31 @@ python -m src.xai             --results-dir results
 python -m src.export_paper    --results-dir results   # copia figuras/macros para paper/
 ```
 
+## Usar os modelos treinados
+
+As simulações guardam só métricas. Para obter modelos utilizáveis, retreine um dos seeds e
+salve os checkpoints em `results/models/{vit,cnn}.pt`. No notebook, isso é a seção 8: ela mostra o
+ranking dos seeds, deixa escolher `SEED_CNN`/`SEED_VIT`, exporta e baixa os `.pt`. Coloque-os em
+`results/models/` do repositório local para rodar a predição. Equivalente em linha de comando:
+
+```bash
+python -m src.export_model --results-dir results                       # melhor seed (maior F1) de cada modelo
+python -m src.export_model --results-dir results --seed-cnn 2 --seed-vit 13   # seeds escolhidos
+python -m src.export_model --results-dir results --seed 13             # mesmo seed para os dois
+```
+
+Para testar, aponte o `predict` para uma pasta. Com subpastas `Real/` e `IA/` (ou `RealArt/` e
+`AiArtData/`), ele calcula acurácia, F1 e erros por classe de cada modelo e do ensemble.
+Imagens que o modelo viu no treino são marcadas (`visto_no_treino`) e ficam fora das métricas.
+
+```bash
+python -m src.predict pasta_teste/ --models-dir results/models --csv predicoes.csv
+python -m src.predict foto.jpg --models-dir results/models --cam      # Grad-CAM em predictions/
+```
+
+Os modelos foram treinados em menos de 700 imagens deste dataset e não generalizam
+necessariamente para geradores ou estilos diferentes.
+
 ## Paper
 
 `paper/main.tex` (IEEEtran, coluna dupla) lê os números de `paper/data/*_macros.tex` e as

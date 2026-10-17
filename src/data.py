@@ -65,7 +65,9 @@ def build_index(cfg: Config) -> pd.DataFrame:
     root = cfg.data_dir or download_dataset()
     cfg.cache_dir.mkdir(parents=True, exist_ok=True)
     rows, n_bad, n_tiny = [], 0, 0
-    for path in sorted(Path(root).rglob("*")):
+    # Ordenação sensível a maiúsculas em qualquer SO (igual ao Linux/Colab): o split de
+    # cada seed depende dessa ordem, então Windows e Colab precisam gerar a mesma.
+    for path in sorted(Path(root).rglob("*"), key=lambda p: p.relative_to(root).parts):
         # Sem extensão também entra (há um JPEG assim no dataset); o PIL valida o conteúdo.
         if (path.suffix and path.suffix.lower() not in IMG_EXTS) or not path.is_file():
             continue
