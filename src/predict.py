@@ -20,7 +20,9 @@ AI_NAMES = {"ia", "ai", "fake", "fakes", "aiart", "aiartdata", "sintetica", "sin
 
 
 def load_checkpoint(path: Path, device):
-    ck = torch.load(path, map_location="cpu", weights_only=False)
+    """Carrega um .pt do export_model: recria a arquitetura, aplica os pesos e monta o
+    mesmo pré-processamento do treino. Retorna (modelo, transformação, checkpoint)."""
+    ck =torch.load(path, map_location="cpu", weights_only=False)
     model = timm.create_model(ck["timm_name"], pretrained=False, num_classes=2)
     model.load_state_dict(ck["state_dict"])
     model.to(device).eval()
@@ -33,13 +35,15 @@ def load_checkpoint(path: Path, device):
 
 
 def load_image(path: Path, cache_size: int) -> Image.Image:
+    """Abre a imagem e a padroniza como no treino: RGB e menor lado = `cache_size` px."""
     with Image.open(path) as im:
         im.load()
         return resize_short_side(to_rgb(im), cache_size)
 
 
 def true_label(f: Path, root: Path) -> int | None:
-    """Rótulo pela pasta: .../Real/x.jpg -> 0, .../IA/x.jpg -> 1 (também RealArt/AiArtData)."""
+    """Rótulo verdadeiro pelo nome da pasta (Real/ -> 0, IA/ -> 1), usado só para conferir
+    o resultado depois da predição; None se a imagem não estiver numa pasta rotulada."""
     rel = f.relative_to(root) if root in f.parents else Path(f.name)
     lab = label_from_path(rel.parent)
     if lab is not None:
@@ -53,6 +57,8 @@ def true_label(f: Path, root: Path) -> int | None:
 
 
 def collect(inputs):
+    """Lista as imagens a classificar (arquivos soltos e pastas, recursivamente) como
+    pares (arquivo, pasta raiz)."""
     files = []
     for p in map(Path, inputs):
         if p.is_dir():
@@ -64,7 +70,9 @@ def collect(inputs):
 
 
 def report(df: pd.DataFrame, keys: list[str]):
-    lab = df.dropna(subset=["verdadeiro"])
+    """Compara predições com os rótulos das pastas e imprime acurácia, F1 e erros por
+    classe de cada modelo e do ensemble."""
+    lab =df.dropna(subset=["verdadeiro"])
     if "erro" in lab:
         lab = lab[lab["erro"].isna()]
     if lab.empty:
@@ -88,6 +96,7 @@ def report(df: pd.DataFrame, keys: list[str]):
 
 
 def main():
+    """Carrega os modelos, classifica cada imagem e mostra a tabela, o resumo e as métricas."""
     ap = argparse.ArgumentParser(
         description="Classifica imagens (Real vs IA). Se a pasta tiver subpastas Real/ e IA/, "
                     "mede acurácia e F1 de cada modelo.")
@@ -95,10 +104,13 @@ def main():
     ap.add_argument("--models-dir", type=Path, default=Path("results/models"))
     ap.add_argument("--models", nargs="+", default=["vit", "cnn"])
     ap.add_argument("--threshold", type=float, default=0.5)
-    ap.add_argument("--cam", action="store_true", help="salva Grad-CAM em --out-dir")
-    ap.add_argument("--out-dir", type=Path, default=Path("predictions"))
-    ap.add_argument("--csv", type=Path, default=None, help="salva a tabela de predições")
+    ap.add_argument("--cam", action="store_true", help="salva o Grad-CAM de cada imagem em --out-dir")
+    ap.add_argument("--csv", action="store_true", help="salva a tabela em --out-dir/predicoes.csv")
+    ap.add_argument("--out-dir", type=Path, default=Path("predictions"),
+                    help="pasta das saídas (criada se não existir)")
     a = ap.parse_args()
+    if a.cam or a.csv:
+        a.out_dir.mkdir(parents=True, exist_ok=True)
 
     device = get_device()
     loaded = {k: load_checkpoint(a.models_dir / f"{k}.pt", device)
@@ -132,7 +144,7 @@ def main():
                 row["p_IA_ens"] = round(pe, 4)
                 row["ens"] = CLASS_NAMES[int(pe >= a.threshold)]
             row["visto_no_treino"] = any(seen)
-        except Exception as e:  # imagem ilegível não derruba o lote
+        except Exception as e: 
             row["erro"] = f"{type(e).__name__}: {e}"[:80]
         rows.append(row)
 
@@ -154,11 +166,15 @@ def main():
         df_eval = df
     report(df_eval, keys)
     if a.csv:
-        df.to_csv(a.csv, index=False)
-        print(f"\n[csv] {a.csv}")
+        csv_path = a.out_dir / "predicoes.csv"
+        df.to_csv(csv_path, index=False)
+        print(f"\n[csv] {csv_path}")
+    if a.cam:
+        print(f"[cam] Grad-CAM salvo em {a.out_dir}")
 
 
 def save_cam(model, key, x, ck, f: Path, cls: int, out_dir: Path):
+    """Gera o Grad-CAM da classe predita e salva a imagem com o mapa de calor sobreposto."""
     from pytorch_grad_cam import GradCAM
     from pytorch_grad_cam.utils.image import show_cam_on_image
     from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
@@ -170,8 +186,7 @@ def save_cam(model, key, x, ck, f: Path, cls: int, out_dir: Path):
     mask = cam(input_tensor=x, targets=[ClassifierOutputTarget(cls)])[0]
     rgb = x[0].permute(1, 2, 0).cpu().numpy() * np.array(ck["std"]) + np.array(ck["mean"])
     overlay = show_cam_on_image(np.clip(rgb, 0, 1).astype(np.float32), mask, use_rgb=True)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{f.stem}_{key}_{CLASS_NAMES[cls]}.png"
+    out =out_dir / f"{f.stem}_{key}_{CLASS_NAMES[cls]}.png"
     Image.fromarray(overlay).save(out)
 
 

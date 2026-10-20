@@ -1,4 +1,3 @@
-"""Fábrica de modelos (Transfer Learning via timm) e utilitários para Grad-CAM."""
 import timm
 import torch.nn as nn
 
@@ -6,6 +5,8 @@ from .config import MODELS
 
 
 def create_model(key: str, pretrained: bool = True, num_classes: int = 2) -> nn.Module:
+    """Cria a ResNet-50 ('cnn') ou o ViT-S/16 ('vit') com pesos do ImageNet e a camada
+    final trocada por uma de `num_classes` saídas (Transfer Learning)."""
     return timm.create_model(MODELS[key], pretrained=pretrained, num_classes=num_classes)
 
 
@@ -16,10 +17,12 @@ def norm_stats(model: nn.Module):
 
 
 def count_params(model: nn.Module) -> int:
+    """Número total de parâmetros do modelo."""
     return sum(p.numel() for p in model.parameters())
 
 
 def gradcam_target_layer(model: nn.Module, key: str) -> nn.Module:
+    """Camada usada pelo Grad-CAM: último bloco residual da ResNet ou último bloco do ViT."""
     if key == "cnn":
         return model.layer4[-1]
     return model.blocks[-1].norm1
@@ -31,6 +34,7 @@ def vit_reshape_transform(model: nn.Module):
     gh, gw = model.patch_embed.grid_size
 
     def reshape(t):
+        """Descarta o token de classe e reorganiza os tokens dos patches na grade 14x14."""
         t = t[:, n_prefix:, :].reshape(t.size(0), gh, gw, t.size(2))
         return t.permute(0, 3, 1, 2)
 

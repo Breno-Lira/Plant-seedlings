@@ -1,11 +1,8 @@
-"""Hiperparâmetros e caminhos compartilhados por todos os scripts."""
 from dataclasses import dataclass, field
 from pathlib import Path
 
 KAGGLE_DATASET = "cashbowman/ai-generated-images-vs-real-images"
 
-# Cenário A (H0) = CNN; Cenário B (H1) = Transformer. Mesma família de
-# pré-treino (ImageNet) e nº de parâmetros comparável (~25M vs ~22M).
 MODELS = {
     "cnn": "resnet50.a1_in1k",
     "vit": "vit_small_patch16_224.augreg_in21k_ft_in1k",
@@ -18,8 +15,8 @@ CLASS_NAMES = ["Real", "IA"]  # rótulo 0 = Real, 1 = Gerada por IA
 @dataclass
 class Config:
     results_dir: Path = Path("results")
-    data_dir: Path | None = None   # None -> baixa via kagglehub
-    cache_size: int = 256          # menor lado das imagens pré-processadas
+    data_dir: Path | None = None   
+    cache_size: int = 256          
     img_size: int = 224
     n_sim: int = 30
     epochs: int = 10

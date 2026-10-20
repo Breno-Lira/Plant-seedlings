@@ -41,7 +41,6 @@ python -m src.eda             --results-dir results
 python -m src.run_simulations --results-dir results --n-sim 30 --epochs 10
 python -m src.stats           --results-dir results
 python -m src.xai             --results-dir results
-python -m src.export_paper    --results-dir results   # copia figuras/macros para paper/
 ```
 
 ## Usar os modelos treinados
@@ -62,18 +61,12 @@ Para testar, aponte o `predict` para uma pasta. Com subpastas `Real/` e `IA/` (o
 Imagens que o modelo viu no treino são marcadas (`visto_no_treino`) e ficam fora das métricas.
 
 ```bash
-python -m src.predict pasta_teste/ --models-dir results/models --csv predicoes.csv
-python -m src.predict foto.jpg --models-dir results/models --cam      # Grad-CAM em predictions/
+python -m src.predict pasta_teste/ --models-dir results/models --csv        # predictions/predicoes.csv
+python -m src.predict foto.jpg --models-dir results/models --cam --csv     # + Grad-CAM em predictions/
 ```
 
 Os modelos foram treinados em menos de 700 imagens deste dataset e não generalizam
 necessariamente para geradores ou estilos diferentes.
-
-## Paper
-
-`paper/main.tex` (IEEEtran, coluna dupla) lê os números de `paper/data/*_macros.tex` e as
-figuras de `paper/figures/`, gerados por `src.export_paper` — nenhum valor é digitado à mão.
-Para compilar, suba a pasta `paper/` no Overleaf (pdfLaTeX + BibTeX).
 
 ## Saídas (`results/`)
 
@@ -82,7 +75,7 @@ Para compilar, suba a pasta `paper/` no Overleaf (pdfLaTeX + BibTeX).
 | `simulations.csv` | 1 linha por (seed, modelo): acurácia, F1, precisão, recall, AUC, matriz de confusão, tempos |
 | `history.csv` | loss/F1 de validação por época |
 | `preds/seedXX_{cnn,vit}.npz` | rótulos e probabilidades no teste (ROC, ensemble) |
-| `stats.json`, `table_results.tex` | testes de hipótese e tabela pronta para o paper |
+| `stats.json` | testes de hipótese (médias, p-valores, tamanho de efeito, conclusão) |
 | `xai_metrics.json` | deletion AUC (Grad-CAM vs aleatório) |
 | `figures/*.pdf, *.png` | figuras do paper (PDF) e dos slides (PNG) |
 

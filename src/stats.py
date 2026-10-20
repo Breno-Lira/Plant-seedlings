@@ -1,11 +1,3 @@
-"""Teste de hipótese pareado (CNN vs ViT) sobre as 30 simulações + figuras.
-
-H0: média(métrica_ViT - métrica_CNN) = 0      H1: != 0 (bicaudal), alfa = 0,05
-Shapiro-Wilk nas diferenças decide o teste principal: t pareado (normal) ou
-Wilcoxon signed-rank (não normal). Ambos são reportados.
-
-    python -m src.stats --results-dir results
-"""
 import argparse
 import json
 from pathlib import Path
@@ -17,7 +9,6 @@ from scipy import stats
 from sklearn.metrics import f1_score, roc_auc_score, roc_curve
 
 from .config import CLASS_NAMES, MODEL_LABELS
-from .latex import write_macros
 from .plotting import GRID, INK_2, MODEL_COLORS, save, setup_style
 
 ALPHA = 0.05
@@ -236,65 +227,6 @@ def fig_history(hist, out):
     save(fig, out / "fig_training_curves")
 
 
-def fmt_p(p: float) -> str:
-    return "$<$0.0001" if p < 1e-4 else f"{p:.4f}"
-
-
-def latex_table(sim, results, ens, path: Path):
-    fmt = lambda m, s: f"{m:.4f} $\\pm$ {s:.4f}"  # noqa: E731
-    lines = [r"\begin{tabular}{lccc}", r"\toprule",
-             r"Métrica & CNN (ResNet-50) & ViT-S/16 & $p$ (teste) \\", r"\midrule"]
-    for m, name in METRICS.items():
-        r = results[m]
-        test = "t" if r["test_used"].startswith("t") else "W"
-        star = "$^{*}$" if r["reject_H0"] else ""
-        lines.append(f"{name} & {fmt(r['mean_cnn'], r['std_cnn'])} & "
-                     f"{fmt(r['mean_vit'], r['std_vit'])} & {fmt_p(r['p_value'])} ({test}){star} \\\\")
-    g = sim.groupby("model")
-    lines += [r"\midrule",
-              f"Parâmetros (M) & {g.params.first()['cnn'] / 1e6:.1f} & "
-              f"{g.params.first()['vit'] / 1e6:.1f} & -- \\\\",
-              f"Tempo de treino (s) & {g.train_time_s.mean()['cnn']:.1f} & "
-              f"{g.train_time_s.mean()['vit']:.1f} & -- \\\\",
-              f"Inferência (ms/img) & {g.infer_ms_per_img.mean()['cnn']:.2f} & "
-              f"{g.infer_ms_per_img.mean()['vit']:.2f} & -- \\\\",
-              f"Épocas até o melhor & {g.best_epoch.mean()['cnn']:.1f} & "
-              f"{g.best_epoch.mean()['vit']:.1f} & -- \\\\",
-              r"\bottomrule", r"\end{tabular}"]
-    path.write_text("\n".join(lines), encoding="utf-8")
-
-
-def write_stats_macros(results, ens, path: Path):
-    """Macros usadas no paper, ex.: FoneCnnMean, FonePvalue, FoneTest, Rejected."""
-    short = {"f1_macro": "Fone", "accuracy": "Acc", "auc": "Auc"}
-    m = {}
-    for key, pre in short.items():
-        r = results[key]
-        m.update({f"{pre}CnnMean": r["mean_cnn"], f"{pre}CnnStd": r["std_cnn"],
-                  f"{pre}VitMean": r["mean_vit"], f"{pre}VitStd": r["std_vit"],
-                  f"{pre}Diff": f"{r['mean_diff']:+.4f}",
-                  f"{pre}CiLow": r["ci95_diff"][0], f"{pre}CiHigh": r["ci95_diff"][1],
-                  f"{pre}ShapiroP": fmt_p(r["shapiro_p"]), f"{pre}TP": fmt_p(r["t_p"]),
-                  f"{pre}WilcoxonP": fmt_p(r["wilcoxon_p"]), f"{pre}Pvalue": fmt_p(r["p_value"]),
-                  f"{pre}Dz": f"{r['cohen_dz']:.3f}", f"{pre}Rrb": f"{r['rank_biserial']:.3f}",
-                  f"{pre}Test": r["test_used"],
-                  f"{pre}VitWins": r["vit_wins"], f"{pre}CnnWins": r["cnn_wins"],
-                  f"{pre}Ties": r["ties"]})
-    r = results["f1_macro"]
-    m["NSim"] = r["n"]
-    m["Rejected"] = "rejeitada" if r["reject_H0"] else "não rejeitada"
-    m["Winner"] = MODEL_LABELS[r["winner"]] if r["winner"] else "nenhum dos modelos"
-    m["ConclusionText"] = (f"o {MODEL_LABELS[r['winner']]} apresentou F1-macro "
-                           "significativamente superior" if r["reject_H0"] else
-                           "não houve evidência estatística de diferença entre os modelos")
-    m["XaiSeed"] = results["xai_seed"]
-    if "ensemble_exploratory" in results:
-        e = results["ensemble_exploratory"]
-        m.update(EnsFoneMean=e["f1_macro"]["mean"], EnsFoneStd=e["f1_macro"]["std"],
-                 EnsAucMean=e["auc"]["mean"])
-    write_macros(path, m)
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results-dir", type=Path, default=Path("results"))
@@ -331,8 +263,6 @@ def main():
                if r["reject_H0"] else "Não rejeita H0 -> sem diferença significativa")
     results["conclusion"] = verdict
     (rd / "stats.json").write_text(json.dumps(results, indent=2, ensure_ascii=False))
-    latex_table(sim, results, ens, rd / "table_results.tex")
-    write_stats_macros(results, ens, rd / "stats_macros.tex")
 
     fig_distribution(sim, ens, out)
     fig_paired(wide.dropna(), out)

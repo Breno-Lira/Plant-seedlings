@@ -1,14 +1,3 @@
-"""Explicabilidade (xAI): Grad-CAM nos dois modelos + métrica de fidelidade (deletion).
-
-Retreina CNN e ViT no seed representativo (ΔF1 mais próximo da mediana, escolhido
-pelo stats.py) — com seeds fixos o resultado fica próximo ao da simulação original.
-
-Deletion: remove (substitui pela média) os pixels em ordem decrescente de
-relevância e mede a queda da probabilidade da classe predita. AUC menor =
-explicação mais fiel. Compara-se com uma ordem aleatória como linha de base.
-
-    python -m src.xai --results-dir results
-"""
 import argparse
 import json
 from pathlib import Path
@@ -21,7 +10,6 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 from .config import CLASS_NAMES, MODEL_LABELS, Config
-from .latex import write_macros
 from .data import ImageDataset, build_index, build_transforms, make_split
 from .models import gradcam_target_layer, norm_stats, vit_reshape_transform
 from .plotting import INK_2, MODEL_COLORS, save, setup_style
@@ -172,12 +160,6 @@ def main():
     save(fig, cfg.figures_dir / "fig_deletion_curves")
 
     (cfg.results_dir / "xai_metrics.json").write_text(json.dumps(metrics, indent=2))
-    write_macros(cfg.results_dir / "xai_macros.tex", dict(
-        XaiN=metrics["n_images"],
-        DelCnnCam=metrics["cnn"]["deletion_auc_gradcam"],
-        DelCnnRnd=metrics["cnn"]["deletion_auc_random"],
-        DelVitCam=metrics["vit"]["deletion_auc_gradcam"],
-        DelVitRnd=metrics["vit"]["deletion_auc_random"]), digits=3)
     print(json.dumps(metrics, indent=2))
 
 

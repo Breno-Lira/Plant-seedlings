@@ -1,4 +1,3 @@
-"""Estilo único das figuras (paper em PDF vetorial + PNG para os slides)."""
 from pathlib import Path
 
 import matplotlib
@@ -6,7 +5,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-# Paleta categórica validada (ordem fixa): azul, laranja, verde-água.
 MODEL_COLORS = {"cnn": "#2a78d6", "vit": "#eb6834", "ens": "#1baf7a"}
 CLASS_COLORS = {0: "#2a78d6", 1: "#eb6834"}
 INK = "#0b0b0b"

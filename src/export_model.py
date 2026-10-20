@@ -57,7 +57,7 @@ def main():
         else:
             print(f"[export] {key}: seed {seed} — treinando...")
         split = make_split(df, seed, cfg.val_frac, cfg.test_frac)
-        model, row, _, _ = train_model(key, split, cfg, seed, get_device(), verbose=False)
+        model, row, _, _ = train_model(key, split, cfg, seed, get_device(), verbose=True)
         mean, std = norm_stats(model)
         path = out_dir / f"{key}.pt"
         torch.save(dict(

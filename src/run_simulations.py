@@ -1,10 +1,3 @@
-"""Executa N simulações pareadas (mesmo split por seed) de CNN vs ViT.
-
-Retomável: pares (seed, modelo) já presentes em simulations.csv são pulados, então
-basta reexecutar se o Colab desconectar.
-
-    python -m src.run_simulations --results-dir /content/drive/MyDrive/estudo/results
-"""
 import argparse
 import gc
 import time
@@ -20,12 +13,14 @@ from .train import get_device, train_model
 
 
 def append_csv(path: Path, rows: list[dict]):
-    df = pd.DataFrame(rows)
+    """Acrescenta linhas ao fim do CSV (escreve o cabeçalho só se o arquivo ainda não existe)."""
+    df =pd.DataFrame(rows)
     df.to_csv(path, mode="a", header=not path.exists(), index=False)
 
 
 def parse_args():
-    ap = argparse.ArgumentParser(description=__doc__)
+    """Lê as opções da linha de comando (pasta de resultados, nº de simulações, épocas etc.)."""
+    ap =argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--results-dir", type=Path, default=Path("results"))
     ap.add_argument("--data-dir", type=Path, default=None,
                     help="pasta local do dataset (padrão: baixa via kagglehub)")
@@ -40,6 +35,8 @@ def parse_args():
 
 
 def main():
+    """Para cada seed, cria o split e treina/avalia CNN e ViT nele, salvando métricas,
+    histórico e probabilidades; pula os pares (seed, modelo) já concluídos."""
     a = parse_args()
     cfg = Config(results_dir=a.results_dir, data_dir=a.data_dir, n_sim=a.n_sim,
                  epochs=a.epochs, batch_size=a.batch_size, num_workers=a.num_workers,
@@ -69,8 +66,7 @@ def main():
                                                      verbose=not a.quiet)
             np.savez(preds_dir / f"seed{seed:02d}_{key}.npz", y=yt, p=pt,
                      md5=split["test"]["md5"].to_numpy())
-            # O histórico vai antes da linha de resultado: se cair entre os dois, o
-            # par é refeito e só gera histórico duplicado (tratado no stats.py).
+            
             append_csv(hist_csv, hist)
             append_csv(sim_csv, [row])
             print(f"[run] seed={seed:02d} {key}: f1={row['f1_macro']:.4f} "

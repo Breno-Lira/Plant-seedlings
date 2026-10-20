@@ -1,4 +1,3 @@
-"""Treino com early stopping, avaliação e métricas de um modelo em um split."""
 import copy
 import random
 import time

@@ -1,7 +1,3 @@
-"""Análise exploratória: distribuição de classes, formatos, resoluções e amostras.
-
-    python -m src.eda --results-dir results
-"""
 import argparse
 import json
 from pathlib import Path
@@ -13,7 +9,6 @@ from PIL import Image
 
 from .config import CLASS_NAMES, Config
 from .data import build_index
-from .latex import write_macros
 from .plotting import CLASS_COLORS, save, setup_style
 
 
@@ -27,7 +22,6 @@ def main():
     df = build_index(cfg)
     out = cfg.figures_dir
 
-    # Contagem por classe + formato original (pista de viés a discutir no paper).
     fmt = df.groupby(["format", "label"]).size().unstack(fill_value=0)
     fmt = fmt.reindex(columns=[0, 1], fill_value=0)
     fmt = fmt.loc[fmt.sum(axis=1).sort_values(ascending=False).index]
@@ -61,7 +55,6 @@ def main():
     fig.tight_layout()
     save(fig, out / "fig_eda_formats")
 
-    # Grade de amostras.
     rng = np.random.default_rng(0)
     n = 6
     fig, axes = plt.subplots(2, n, figsize=(7.2, 2.7))
@@ -89,11 +82,6 @@ def main():
     if report.exists():
         summary["cleaning"] = json.loads(report.read_text())
     (cfg.results_dir / "eda.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False))
-    clean = summary.get("cleaning", {})
-    write_macros(cfg.results_dir / "eda_macros.tex", dict(
-        NImages=len(df), NReal=int((df.label == 0).sum()), NAi=int((df.label == 1).sum()),
-        NFound=clean.get("found", len(df)), NCorrupted=clean.get("corrupted", 0),
-        NTiny=clean.get("tiny", 0), NDuplicates=clean.get("duplicates_removed", 0)))
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 
 

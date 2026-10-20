@@ -1,4 +1,3 @@
-"""Download, limpeza, deduplicação, cache pré-processado e splits do dataset."""
 import hashlib
 import json
 import warnings
@@ -23,11 +22,13 @@ MIN_SIDE = 32
 
 
 def download_dataset() -> Path:
+    """Baixa o dataset do Kaggle via kagglehub (sem login) e retorna a pasta local."""
     import kagglehub
     return Path(kagglehub.dataset_download(KAGGLE_DATASET))
 
 
 def label_from_path(path: Path) -> int | None:
+    """Rótulo pela pasta: 1 se o caminho contém 'AiArt', 0 se contém 'RealArt', senão None."""
     parts = [p.lower() for p in path.parts]
     if any("aiart" in p for p in parts):
         return 1
@@ -47,17 +48,18 @@ def to_rgb(img: Image.Image) -> Image.Image:
 
 
 def resize_short_side(img: Image.Image, size: int) -> Image.Image:
+    """Redimensiona mantendo a proporção, de modo que o menor lado fique com `size` px."""
     w, h = img.size
     s = size / min(w, h)
     return img.resize((max(1, round(w * s)), max(1, round(h * s))), Image.BICUBIC)
 
 
 def build_index(cfg: Config) -> pd.DataFrame:
-    """Varre o dataset, descarta arquivos corrompidos/minúsculos, remove duplicatas
-    exatas (md5) e salva uma cópia padronizada (RGB, menor lado = cache_size, PNG).
+    """Monta a tabela de imagens do dataset (salva em index.csv; se já existe, só a lê).
 
-    A padronização remove pistas triviais de formato/resolução original, que
-    poderiam deixar o classificador "trapacear" em vez de aprender artefatos visuais.
+    Descarta arquivos corrompidos ou menores que 32 px, remove duplicatas exatas (md5)
+    e grava uma cópia padronizada de cada imagem (RGB, menor lado = 256 px, PNG), para
+    que formato e resolução originais não sirvam de pista para o classificador.
     """
     if cfg.index_csv.exists():
         return pd.read_csv(cfg.index_csv)
@@ -65,10 +67,9 @@ def build_index(cfg: Config) -> pd.DataFrame:
     root = cfg.data_dir or download_dataset()
     cfg.cache_dir.mkdir(parents=True, exist_ok=True)
     rows, n_bad, n_tiny = [], 0, 0
-    # Ordenação sensível a maiúsculas em qualquer SO (igual ao Linux/Colab): o split de
-    # cada seed depende dessa ordem, então Windows e Colab precisam gerar a mesma.
+    
     for path in sorted(Path(root).rglob("*"), key=lambda p: p.relative_to(root).parts):
-        # Sem extensão também entra (há um JPEG assim no dataset); o PIL valida o conteúdo.
+       
         if (path.suffix and path.suffix.lower() not in IMG_EXTS) or not path.is_file():
             continue
         label = label_from_path(path.relative_to(root))
@@ -97,7 +98,7 @@ def build_index(cfg: Config) -> pd.DataFrame:
 
     df = pd.DataFrame(rows)
     n_raw = len(df)
-    # Mesma imagem nas duas classes é ambígua -> remove todas as cópias.
+    
     conflict = df.groupby("md5")["label"].nunique()
     df = df[~df["md5"].isin(conflict[conflict > 1].index)]
     df = df.drop_duplicates("md5").reset_index(drop=True)
@@ -111,7 +112,11 @@ def build_index(cfg: Config) -> pd.DataFrame:
 
 
 def make_split(df: pd.DataFrame, seed: int, val_frac: float, test_frac: float):
-    """Split estratificado 70/15/15 dependente apenas do seed (pareado entre modelos)."""
+    """Divide em treino/validação/teste (70/15/15), mantendo a proporção Real/IA.
+
+    O resultado depende só do seed, então CNN e ViT recebem a mesma divisão em cada
+    simulação. Verifica também que nenhuma imagem aparece em mais de um conjunto.
+    """
     idx = np.arange(len(df))
     y = df["label"].to_numpy()
     tr_val, test = train_test_split(idx, test_size=test_frac, stratify=y, random_state=seed)
@@ -126,6 +131,8 @@ def make_split(df: pd.DataFrame, seed: int, val_frac: float, test_frac: float):
 
 
 def build_transforms(img_size: int, mean, std):
+    """Retorna as transformações de treino (recorte e espelhamento aleatórios) e de
+    avaliação (recorte central), ambas convertendo para tensor normalizado."""
     norm = transforms.Normalize(mean, std)
     train = transforms.Compose([
         transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0)),
@@ -139,26 +146,33 @@ def build_transforms(img_size: int, mean, std):
 
 
 class ImageDataset(Dataset):
+    """Dataset do PyTorch: entrega (imagem transformada, rótulo) a partir das cópias em cache."""
+
     def __init__(self, df: pd.DataFrame, transform):
+        """Guarda os caminhos das imagens em cache, os rótulos e a transformação a aplicar."""
         self.paths = df["cached"].tolist()
         self.labels = df["label"].to_numpy()
         self.transform = transform
 
     def __len__(self):
+        """Número de imagens do conjunto."""
         return len(self.paths)
 
     def __getitem__(self, i):
+        """Abre a i-ésima imagem, aplica a transformação e devolve (tensor, rótulo)."""
         with Image.open(self.paths[i]) as im:
             img = im.convert("RGB")
         return self.transform(img), int(self.labels[i])
 
 
 def _seed_worker(worker_id):
+    """Fixa o seed do NumPy em cada processo do DataLoader, para resultados reprodutíveis."""
     s = torch.initial_seed() % 2**32
     np.random.seed(s)
 
 
 def make_loaders(split, cfg: Config, mean, std, seed: int):
+    """Cria os DataLoaders de treino (embaralhado, com seed fixo), validação e teste."""
     t_train, t_eval = build_transforms(cfg.img_size, mean, std)
     g = torch.Generator().manual_seed(seed)
     kw = dict(batch_size=cfg.batch_size, num_workers=cfg.num_workers,
